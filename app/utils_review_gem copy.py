@@ -27,7 +27,7 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/reviews")
 
 # # -----------------------
-
+# # CONFIG
 GENAI_API_KEY = getattr(settings, "GENAI_API_KEY", None) or os.environ.get("GENAI_API_KEY", None)
 if GENAI_API_KEY:
     genai.configure(api_key=GENAI_API_KEY)
@@ -236,6 +236,7 @@ def safe_parse_json(raw: str) -> Optional[Dict]:
 # -----------------------
 # GEMINI CALL (SYNCHRONOUS)
 # -----------------------
+@router.post("/analyze_reply_sync", summary="Analyze review and generate reply (synchronous Gemini call)")
 def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, store_location: str) -> Dict:
     """Synchronous Gemini call with original prompt"""
     customer_name_norm = normalize_name(customer_name)
@@ -252,6 +253,8 @@ def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, sto
     else:
         example_opening = random.choice(NEUTRAL_OPENINGS)
 
+    #########################################
+    # Heuristic fallback for safety blocks or API issues
     prompt = f"""You are a sentiment, emotion, and attribute analyzer for Poorvika, a leading electronics retailer.
 
                 **TASK:**
@@ -330,7 +333,9 @@ def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, sto
                 "reply": "[Natural personalized response - single paragraph, 4-5 sentences, 60-80 words, no formal closing]"
                 }}
                 """
-
+    #   # prompt = build_prompt(review_text, star_rating_int, customer_name_norm, store_canonical, selected_tone, example_opening, star_rating_int, EMAIL)
+    ###############################################
+    
     config = types.GenerationConfig(temperature=0.3, top_p=0.95, max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS)
     
     if not GENAI_API_KEY:
@@ -501,31 +506,33 @@ async def process_all_reviews(
         date_to = datetime.now().strftime("%Y-%m-%d")
 
     logger.info(f"🔍 Filters: location={location_filter}, dates={date_from} to {date_to}")
-
-    query = f"""
-    SELECT id, reviewId, name, comment, rating, createTime, reviewer_displayName, reviewReply, title
-    FROM {TABLE_NAME}
-    WHERE (reviewReply IS NULL OR reviewReply = '')
-    """
+    #####################################
+    # fetch_reviews start
+    # query = f"""
+    # SELECT id, reviewId, name, comment, rating, createTime, reviewer_displayName, reviewReply, title
+    # FROM {TABLE_NAME}
+    # WHERE (reviewReply IS NULL OR reviewReply = '')
+    # """
     
-    params = []
-    if location_filter:
-        query += f" AND name = %s"
-        params.append(location_filter)
+    # params = []
+    # if location_filter:
+    #     query += f" AND name = %s"
+    #     params.append(location_filter)
     
-    query += f" AND createTime >= %s AND createTime <= %s"
-    params.append(f"{date_from} 00:00:00")
-    params.append(f"{date_to} 23:59:59")
+    # query += f" AND createTime >= %s AND createTime <= %s"
+    # params.append(f"{date_from} 00:00:00")
+    # params.append(f"{date_to} 23:59:59")
     
-    query += f" LIMIT {max_reviews}"
+    # query += f" LIMIT {max_reviews}"
 
-    logger.info(f"📊 Query: {query}")
+    # logger.info(f"📊 Query: {query}")
 
-    try:
-        reviews = db.execute_query(query, tuple(params) if params else None)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
-
+    # try:
+    #     reviews = db.execute_query(query, tuple(params) if params else None)
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail=f"Query failed: {e}")
+    # fetch_reviews end
+    #####################################
     if not reviews:
         return {
             "message": "No reviews found in specified partitions",
@@ -574,21 +581,24 @@ async def process_all_reviews(
             }
             analysis = {"parsed": parsed, "quality_score": 50}
         else:
-            try:
-                analysis = call_gemini_sync(comment, star_rating_int, reviewer, store_canonical)
-                parsed = analysis.get("parsed", {})
-            except Exception as e:
-                logger.error(f"Gemini failed for {review_id}: {e}")
-                sentiment = "positive" if star_rating_int >= 4 else ("negative" if star_rating_int <= 2 else "neutral")
-                heuristics = detect_attributes_and_emotion(comment)
-                parsed = {
-                    "sentiment": sentiment,
-                    "emotion": heuristics["emotion"],
-                    "attributes": heuristics["attributes"],
-                    "reply": build_reply_template(reviewer, store_canonical, star_rating_int, sentiment)
-                }
-                analysis = {"parsed": parsed, "quality_score": 50}
-
+            #######################################################
+            # analyze_review start - call_gemini_sync
+            # try:
+            #     analysis = call_gemini_sync(comment, star_rating_int, reviewer, store_canonical)
+            #     parsed = analysis.get("parsed", {})
+            # except Exception as e:
+            #     logger.error(f"Gemini failed for {review_id}: {e}")
+            #     sentiment = "positive" if star_rating_int >= 4 else ("negative" if star_rating_int <= 2 else "neutral")
+            #     heuristics = detect_attributes_and_emotion(comment)
+            #     parsed = {
+            #         "sentiment": sentiment,
+            #         "emotion": heuristics["emotion"],
+            #         "attributes": heuristics["attributes"],
+            #         "reply": build_reply_template(reviewer, store_canonical, star_rating_int, sentiment)
+            #     }
+            #     analysis = {"parsed": parsed, "quality_score": 50}
+            # analyze_review end
+            #######################################################
         reply_text = parsed.get("reply", "")
         if not reply_text:
             sentiment = "positive" if star_rating_int >= 4 else ("negative" if star_rating_int <= 2 else "neutral")
@@ -703,30 +713,33 @@ async def process_all_reviews(
             elapsed = time.time() - start_time
             rate = processed_count / elapsed if elapsed > 0 else 0
             logger.info(f"📈 {processed_count}/{len(reviews)} | {rate:.1f}/sec | CPU: {cpu}%")
-
-    if batch and not dry_run:
-        try:
-            db.execute_batch_upsert(
-                "location_reviews",
-                [
-                    "name", "reviewId", "reviewer_displayName", "reviewer_isAnonymous",
-                    "reviewer_profilePhotoUrl", "starRating", "rating", "comment",
-                    "createTime", "updateTime", "fetchedAt", "reviewReply", "title",
-                    "sentiment", "emotion", "attributes", "context_sentiment", "context_confidence",
-                    "final_sentiment", "quality_score", "post_error"
-                ],
-                batch,
-                unique_key="reviewId",
-                update_columns=[
-                    "updateTime", "fetchedAt", "reviewReply",
-                    "sentiment", "emotion", "attributes", "context_sentiment", "context_confidence",
-                    "final_sentiment", "quality_score", "post_error"
-                ]
-            )
-            logger.info(f"✅ Final batch: {len(batch)} reviews bulk upserted")
-        except Exception as e:
-            logger.error(f"Final batch upsert failed: {e}")
-            errors.append(str(e)[:100])
+    #############################################
+    # bulk_upsert any remaining reviews in batch
+    # if batch and not dry_run:
+    #     try:
+    #         db.execute_batch_upsert(
+    #             "location_reviews",
+    #             [
+    #                 "name", "reviewId", "reviewer_displayName", "reviewer_isAnonymous",
+    #                 "reviewer_profilePhotoUrl", "starRating", "rating", "comment",
+    #                 "createTime", "updateTime", "fetchedAt", "reviewReply", "title",
+    #                 "sentiment", "emotion", "attributes", "context_sentiment", "context_confidence",
+    #                 "final_sentiment", "quality_score", "post_error"
+    #             ],
+    #             batch,
+    #             unique_key="reviewId",
+    #             update_columns=[
+    #                 "updateTime", "fetchedAt", "reviewReply",
+    #                 "sentiment", "emotion", "attributes", "context_sentiment", "context_confidence",
+    #                 "final_sentiment", "quality_score", "post_error"
+    #             ]
+    #         )
+    #         logger.info(f"✅ Final batch: {len(batch)} reviews bulk upserted")
+    #     except Exception as e:
+    #         logger.error(f"Final batch upsert failed: {e}")
+    #         errors.append(str(e)[:100])
+    # end of processing loop
+    #############################################
 
     elapsed = time.time() - start_time
 
@@ -1734,131 +1747,3 @@ async def _write_batch_to_db(batch: List):
     except Exception as e:
         logger.error(f"❌ Failed to write batch to PlanetScale: {e}")
         raise
-
-
-@router.post("/analyze_reply_sync", summary="Analyze review and generate reply (synchronous Gemini call)")
-def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, store_location: str) -> Dict:
-    """Synchronous Gemini call with original prompt"""
-    customer_name_norm = normalize_name(customer_name)
-    store_canonical = _normalize_title(store_location)
-    star_rating_int = parse_star_rating(star_rating, default=3)
-    
-    selected_tone = random.choice(REPLY_TONES)
-    sentiment = "positive" if star_rating_int >= 4 else ("negative" if star_rating_int <= 2 else "neutral")
-    
-    if sentiment == "positive":
-        example_opening = random.choice(POSITIVE_OPENINGS)
-    elif sentiment == "negative":
-        example_opening = random.choice(NEGATIVE_OPENINGS)
-    else:
-        example_opening = random.choice(NEUTRAL_OPENINGS)
-    
-    #########################################
-    # Heuristic fallback for safety blocks or API issues
-    
-    
-    ###############################################
-    
-    config = types.GenerationConfig(temperature=0.3, top_p=0.95, max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS)
-    
-    if not GENAI_API_KEY:
-        heuristics = detect_attributes_and_emotion(review_text)
-        return {
-            "parsed": {
-                "sentiment": sentiment,
-                "emotion": heuristics["emotion"],
-                "attributes": heuristics["attributes"],
-                "star_rating": star_rating_int,
-                "reply": build_reply_template(customer_name_norm, store_canonical, star_rating_int, sentiment),
-            },
-            "quality_score": 50
-        }
-
-    try:
-        model = genai.GenerativeModel(model_name=MODEL)
-        response = model.generate_content(prompt, generation_config=config)
-        
-        # Check for safety blocks or other issues
-        if not response.candidates:
-            logger.warning(f"No candidates returned (likely safety block)")
-            heuristics = detect_attributes_and_emotion(review_text)
-            return {
-                "parsed": {
-                    "sentiment": sentiment,
-                    "emotion": heuristics["emotion"],
-                    "attributes": heuristics["attributes"],
-                    "star_rating": star_rating_int,
-                    "reply": build_reply_template(customer_name_norm, store_canonical, star_rating_int, sentiment),
-                },
-                "quality_score": 50
-            }
-        
-        # Check finish reason
-        candidate = response.candidates[0]
-        if hasattr(candidate, 'finish_reason'):
-            # finish_reason: 0=STOP (success), 1=MAX_TOKENS, 2=SAFETY, 3=RECITATION, 4=OTHER
-            if candidate.finish_reason == 2:  # SAFETY block
-                logger.warning(f"Gemini safety block on review: {review_text[:100]}")
-                heuristics = detect_attributes_and_emotion(review_text)
-                return {
-                    "parsed": {
-                        "sentiment": sentiment,
-                        "emotion": heuristics["emotion"],
-                        "attributes": heuristics["attributes"],
-                        "star_rating": star_rating_int,
-                        "reply": build_reply_template(customer_name_norm, store_canonical, star_rating_int, sentiment),
-                    },
-                    "quality_score": 50
-                }
-        
-    except Exception as e:
-        logger.error(f"Gemini error: {e}")
-        heuristics = detect_attributes_and_emotion(review_text)
-        return {
-            "parsed": {
-                "sentiment": sentiment,
-                "emotion": heuristics["emotion"],
-                "attributes": heuristics["attributes"],
-                "star_rating": star_rating_int,
-                "reply": build_reply_template(customer_name_norm, store_canonical, star_rating_int, sentiment),
-            },
-            "quality_score": 50
-        }
-
-    raw_text = ""
-    if hasattr(response, 'text'):
-        raw_text = response.text
-    elif hasattr(response, 'candidates') and response.candidates:
-        for cand in response.candidates:
-            content = getattr(cand, "content", None) or {}
-            if hasattr(content, "parts"):
-                for p in content.parts:
-                    if getattr(p, "text", None):
-                        raw_text += p.text
-
-    parsed = safe_parse_json(raw_text)
-    heuristics = detect_attributes_and_emotion(review_text)
-
-    if not parsed:
-        parsed = {
-            "sentiment": sentiment,
-            "emotion": heuristics["emotion"],
-            "attributes": heuristics["attributes"],
-            "star_rating": star_rating_int,
-            "reply": build_reply_template(customer_name_norm, store_canonical, star_rating_int, sentiment),
-        }
-
-    parsed.setdefault("star_rating", star_rating_int)
-    parsed.setdefault("sentiment", sentiment)
-    parsed.setdefault("emotion", heuristics["emotion"])
-    parsed.setdefault("attributes", heuristics["attributes"])
-
-    if "reply" in parsed and parsed["reply"]:
-        parsed["reply"] = enforce_customer_name_in_reply(parsed["reply"], customer_name_norm, store_canonical, star_rating_int)
-    else:
-        parsed["reply"] = enforce_customer_name_in_reply(
-            build_reply_template(customer_name_norm, store_canonical, star_rating_int, sentiment),
-            customer_name_norm, store_canonical, star_rating_int
-        )
-
-    return {"parsed": parsed, "quality_score": 75}
