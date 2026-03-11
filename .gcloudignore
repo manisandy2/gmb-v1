@@ -1,0 +1,23 @@
+
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# IMPORTANT: These files MUST be included in the build
+# The ! prefix means "don't ignore this file"
+!config.env
+!config.credentials.json

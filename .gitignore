@@ -1,0 +1,102 @@
+# ============================================================
+#  R2 GMB | FastAPI + PySpark + Docker + Cloud Run
+# ============================================================
+
+# -------------------------------
+# PYTHON BUILD / BYTECODE
+# -------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.manifest
+*.spec
+pip-wheel-metadata/
+MANIFEST
+*.bak
+
+# -------------------------------
+# VIRTUAL ENVIRONMENTS
+# -------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+env*/
+.env
+
+
+# -------------------------------
+# OS / SYSTEM FILES
+# -------------------------------
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+._*
+
+# -------------------------------
+# LOGS / TEMP
+# -------------------------------
+logs/
+*.log
+*.out
+*.pid
+*.tmp
+tmp/
+temp/
+__temp__/
+.cache/
+*.bak
+
+# -------------------------------
+# SPARK / ICEBERG
+# -------------------------------
+spark-warehouse/
+derby.log
+.metastore_db/
+spark-events/
+spark_logs/
+__spark_temp__/
+.sparkStaging/
+*.crc
+*.parquet.crc
+*.avro.crc
+--------------------------
+# ENVIRONMENT CONFIG
+# -------------------------------
+.env
+.env.*
+.envrc
+.env.backup
+.env.local
+.env.dev
+.env.prod
+.env.test
+.env.stage
+.env.example
+.envrc
+
+
+
+
+# JetBrains
+.idea/
+*.iml
+
+
+credentials.json
+/credentials.json
+config.env
+# End of file
+# ============================================================

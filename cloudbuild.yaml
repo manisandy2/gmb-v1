@@ -1,0 +1,171 @@
+substitutions:
+  _REPOSITORY: "som-artifact-repo"
+  _IMAGE: "som-prod-gmb"
+  _SERVICE_NAME: "google-my-business-backend"
+  _JOB_NAME: "google-my-business-job"
+  _JOB_NAME_2: "google-my-business-job-1"
+  _JOB_NAME_3: "google-my-business-job-2"
+  _REGION: "asia-south1"
+  _SHORT_SHA: "latest"
+  
+timeout: 3600s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - "asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+
+steps:
+  # -----------------------------
+  # Step 1: Build Docker image
+  # -----------------------------
+  - id: "Build image"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+      - "."
+      - "--build-arg"
+      - "CI_ENVIRONMENT_NAME=development"
+
+  # -----------------------------
+  # Step 2: Push Docker image
+  # -----------------------------
+  - id: "Push image"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+
+  # -----------------------------
+  # Step 3: Deploy Cloud Run Service (FastAPI)
+  # -----------------------------
+  - id: "Deploy to Cloud Run Service"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        echo "🚀 Deploying Cloud Run Service: ${_SERVICE_NAME}"
+        echo "🖼 Image: asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+          --region="${_REGION}" \
+          --platform=managed \
+          --allow-unauthenticated \
+          --set-env-vars="RUN_JOB=0" \
+          --memory="2Gi" \
+          --port=8080 \
+          --timeout=600s \
+          --quiet
+
+        echo "✅ Cloud Run Service deployed successfully with RUN_JOB=0"
+
+  # -----------------------------
+  # Step 4: Deploy Cloud Run Job 1
+  # -----------------------------
+  - id: "Deploy to Cloud Run Job"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        echo "🚀 Deploying Cloud Run Job: ${_JOB_NAME}"
+        echo "🖼 Image: asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+
+        if gcloud run jobs describe "${_JOB_NAME}" --region="${_REGION}" &>/dev/null; then
+          echo "Job exists, updating..."
+          gcloud run jobs update "${_JOB_NAME}" \
+            --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+            --region="${_REGION}" \
+            --set-env-vars="RUN_JOB=1" \
+            --max-retries=3 \
+            --task-timeout=3600s \
+            --quiet
+        else
+          echo "Job does not exist, creating..."
+          gcloud run jobs create "${_JOB_NAME}" \
+            --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+            --region="${_REGION}" \
+            --set-env-vars="RUN_JOB=1" \
+            --max-retries=3 \
+            --task-timeout=3600s \
+            --quiet
+        fi
+
+        echo "✅ Cloud Run Job deployed successfully!"
+
+  # -----------------------------
+  # Step 5: Deploy Cloud Run Job 2
+  # -----------------------------
+  - id: "Deploy to Cloud Run Job 2"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        echo "🚀 Deploying Cloud Run Job 2: ${_JOB_NAME_2}"
+        echo "🖼 Image: asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+
+        if gcloud run jobs describe "${_JOB_NAME_2}" --region="${_REGION}" &>/dev/null; then
+          echo "Job 2 exists, updating..."
+          gcloud run jobs update "${_JOB_NAME_2}" \
+            --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+            --region="${_REGION}" \
+            --set-env-vars="RUN_JOB=2" \
+            --max-retries=3 \
+            --task-timeout=3600s \
+            --quiet
+        else
+          echo "Job 2 does not exist, creating..."
+          gcloud run jobs create "${_JOB_NAME_2}" \
+            --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+            --region="${_REGION}" \
+            --set-env-vars="RUN_JOB=2" \
+            --max-retries=3 \
+            --task-timeout=3600s \
+            --quiet
+        fi
+
+        echo "✅ Cloud Run Job 2 deployed successfully!"
+
+  # -----------------------------
+  # Step 6: Deploy Cloud Run Job 3
+  # -----------------------------
+  - id: "Deploy to Cloud Run Job 3"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        set -euo pipefail
+        echo "🚀 Deploying Cloud Run Job 3: ${_JOB_NAME_3}"
+        echo "🖼 Image: asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA"
+
+        if gcloud run jobs describe "${_JOB_NAME_3}" --region="${_REGION}" &>/dev/null; then
+          echo "Job 3 exists, updating..."
+          gcloud run jobs update "${_JOB_NAME_3}" \
+            --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+            --region="${_REGION}" \
+            --set-env-vars="RUN_JOB=3" \
+            --max-retries=3 \
+            --task-timeout=3600s \
+            --quiet
+        else
+          echo "Job 3 does not exist, creating..."
+          gcloud run jobs create "${_JOB_NAME_3}" \
+            --image="asia-south1-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$_SHORT_SHA" \
+            --region="${_REGION}" \
+            --set-env-vars="RUN_JOB=3" \
+            --max-retries=3 \
+            --task-timeout=3600s \
+            --quiet
+        fi
+
+        echo "✅ Cloud Run Job 3 deployed successfully!"

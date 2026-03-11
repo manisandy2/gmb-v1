@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gmb-web
+    ports:
+      - "8080:8080"
+    environment:
+      - RUN_JOB=0
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      
+      # Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8080/api/v1/auth/google/callback}
+      - GOOGLE_ACCOUNT_ID=${GOOGLE_ACCOUNT_ID}
+      - GOOGLE_CREDENTIALS_FILE=config.credentials.json
+      
+      # PlanetScale Database
+      - PLANETSCALE_HOST=${PLANETSCALE_HOST}
+      - PLANETSCALE_USER=${PLANETSCALE_USER}
+      - PLANETSCALE_PASSWORD=${PLANETSCALE_PASSWORD}
+      - PLANETSCALE_DATABASE=${PLANETSCALE_DATABASE}
+      
+      # AI APIs
+      - GENAI_API_KEY=${GENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      
+      # Feature Flags (Optional)
+      - REPLY_REVIEWS_ENABLED=${REPLY_REVIEWS_ENABLED:-true}
+      - REPLY_REVIEWS_DRY_RUN=${REPLY_REVIEWS_DRY_RUN:-false}
+      
+      # Scheduler Intervals (seconds)
+      - TOKEN_REFRESH_INTERVAL_SECONDS=${TOKEN_REFRESH_INTERVAL_SECONDS:-3600}
+      - FETCH_REVIEWS_INTERVAL_SECONDS=${FETCH_REVIEWS_INTERVAL_SECONDS:-1800}
+      - REPLY_REVIEWS_INTERVAL_SECONDS=${REPLY_REVIEWS_INTERVAL_SECONDS:-1800}
+      - SUMMARY_REVIEWS_INTERVAL_SECONDS=${SUMMARY_REVIEWS_INTERVAL_SECONDS:-3600}
+      
+    volumes:
+      - ./config.env:/app/config.env:ro
+      - ./config.credentials.json:/app/config.credentials.json:ro
+      - ./logs:/app/logs
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    restart: unless-stopped
+    
+    networks:
+      - gmb-network
+    
+    depends_on:
+      - setup
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Setup service to validate configuration
+  setup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gmb-setup
+    command: /bin/bash -c "echo 'Setup: Validating configuration files...' && python3 -m json.tool /app/config.credentials.json > /dev/null 2>&1 && echo 'Setup: Configuration valid!' || exit 1"
+    volumes:
+      - ./config.env:/app/config.env:ro
+      - ./config.credentials.json:/app/config.credentials.json:ro
+    networks:
+      - gmb-network
+    restart: "no"
+
+networks:
+  gmb-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local

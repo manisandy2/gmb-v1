@@ -1,0 +1,102 @@
+image: docker:latest
+
+stages:
+  - deploy
+
+.default_deploy_template: &default_deploy
+  stage: deploy
+  image: google/cloud-sdk:latest
+  tags:
+    - linode
+  before_script:
+    - set -euo pipefail
+  script:
+    - echo "$GCP_BUILD_KEY" > gcloud-service-key.json
+    - gcloud auth activate-service-account --key-file=gcloud-service-key.json
+    - gcloud config set project "$PROJECT_ID"
+    - cp "$ENV_FILE" config.env
+
+    # Copy credentials file from GitLab File variable
+    - |
+      echo "================================================"
+      echo "Copying credentials file..."
+      echo "================================================"
+      echo "Source file: $GOOGLE_APPLICATION_CREDENTIALS"
+      ls -lh "$GOOGLE_APPLICATION_CREDENTIALS"
+      cp "$GOOGLE_APPLICATION_CREDENTIALS" config.credentials.json
+
+    # Validate the credentials file
+    - |
+      echo
+      echo "================================================"
+      echo "Validating credentials file..."
+      echo "================================================"
+      ls -lh config.credentials.json
+      python3 -m json.tool < config.credentials.json >/dev/null \
+        && echo "✓ JSON is valid" \
+        || { echo "✗ JSON is INVALID"; exit 1; }
+
+    # Verify structure using Python (heredoc wrapped in YAML block scalar)
+    - |
+      python3 - <<'PY'
+      import json, sys, pathlib
+      p = pathlib.Path("config.credentials.json")
+
+      print("\n" + "="*50)
+      print("Checking credentials structure...")
+      print("="*50)
+
+      try:
+          data = json.loads(p.read_text())
+          print("✓ File loaded successfully")
+          print("Top-level keys:", list(data.keys()))
+          if 'web' not in data and 'installed' not in data:
+              print("\n❌ ERROR: Missing web or installed key!")
+              print("Found keys:", list(data.keys()))
+              sys.exit(1)
+
+          creds = data.get('web') or data.get('installed')
+          creds_type = 'web' if 'web' in data else 'installed'
+          print(f"✓ Found {creds_type} credentials")
+
+          required = ['client_id', 'client_secret']
+          missing = [k for k in required if k not in creds]
+          if missing:
+              print(f"\n❌ ERROR: Missing required keys: {missing}")
+              sys.exit(1)
+
+          print("✓ All required keys present")
+          print("\n" + "="*50)
+          print("✓ Credentials file is valid for OAuth")
+          print("="*50 + "\n")
+      except Exception as e:
+          print(f"\n❌ ERROR: {e}")
+          sys.exit(1)
+      PY
+
+    - |
+      echo "================================================"
+      echo "Submitting build to Cloud Build..."
+      echo "================================================"
+      gcloud builds submit . --config=cloudbuild.yaml
+
+deploy_dev:
+  <<: *default_deploy
+  environment:
+    name: dev
+  only:
+    - dev
+
+deploy_stage:
+  <<: *default_deploy
+  environment:
+    name: stage
+  only:
+    - stage
+
+deploy_production:
+  <<: *default_deploy
+  environment:
+    name: production
+  only:
+    - Production
