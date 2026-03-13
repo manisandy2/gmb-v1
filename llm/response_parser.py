@@ -1,15 +1,11 @@
-import json
+from utils.json_utils import safe_parse_json
 
 
-def parse_response(response_text: str):
+def parse_response(text: str):
 
-    try:
-        return json.loads(response_text)
+    parsed = safe_parse_json(text)
 
-    except Exception:
-        return {
-            "sentiment": "unknown",
-            "emotion": "other",
-            "attributes": [],
-            "reply": ""
-        }
+    if not parsed:
+        raise ValueError("Invalid JSON response")
+
+    return parsed

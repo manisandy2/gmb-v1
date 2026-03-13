@@ -1,11 +1,17 @@
 import google.generativeai as genai
-from llm.config import MODEL
+import asyncio
+from app.config import settings
 
+genai.configure(api_key=settings.GENAI_API_KEY)
 
-def generate_response(prompt: str):
+# model = genai.GenerativeModel(settings.POORVIKA_GEMINI_MODEL)
 
-    model = genai.GenerativeModel(MODEL)
+model = getattr(settings, "POORVIKA_GEMINI_MODEL", "gemini-2.5-flash")
+async def call_gemini(prompt: str):
 
-    response = model.generate_content(prompt)
+    response = await asyncio.to_thread(
+        model.generate_content,
+        prompt
+    )
 
     return response.text

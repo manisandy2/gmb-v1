@@ -1,10 +1,13 @@
-from llm.gemini_client import generate_response
+from utils.sentiment_detector import detect_attributes
 
 
-def safe_generate(prompt):
+def fallback_response(data):
 
-    try:
-        return generate_response(prompt)
+    heuristics = detect_attributes(data.get("review_text", ""))
 
-    except Exception:
-        return None
+    return {
+        "sentiment": heuristics["sentiment"],
+        "emotion": heuristics["emotion"],
+        "attributes": heuristics["attributes"],
+        "reply": "Thank you for your feedback. We appreciate your review and will continue improving our service."
+    }
