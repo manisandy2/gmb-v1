@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import Dict
+from app.db.init_db import init_db 
 
 from fastapi import FastAPI, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -126,7 +127,9 @@ async def startup_event():
 
     # Initialize PlanetScale database
     try:
-        from app.connections import init_db  # type: ignore
+        # from app.connections import init_db  # type: ignore
+        # await init_db()
+        # from app.db.init_db import init_db  # type: ignore
         await init_db()
         logger.info("✅ PlanetScale database initialized")
     except Exception:
@@ -136,22 +139,26 @@ async def startup_event():
     # Include Routers (with /api/v1 prefix automatically applied)
     try:
         if not getattr(app.state, "routers_included", False):
-            from app.routers import router as main_router  # type: ignore
+            # from app.routers import router as main_router  # type: ignore
             from app.metrics_router import router as metrics_router  # type: ignore
             from app.event_post_router import router as event_post_router  # type: ignore
-            from app.utils_review_gem import router as gemini_router  # type: ignore
+            # from app.utils_review_gem import router as gemini_router  # type: ignore
             from app.regions import router as regions_router  # type: ignore
-            from app.reviews import router as review_router
+            # from app.reviews import router as review_router
+            # from app.routers import reviews_router
             from app.auth import router as auth_router
+            from app.api.review_router import router as gemini_router
 
             # ✅ Routers will inherit the /api/v1 prefix automatically
-            app.include_router(main_router,prefix="/api/v1")
+            # app.include_router(main_router,prefix="/api/v1")
             app.include_router(metrics_router,prefix="/api/v1")
             app.include_router(event_post_router,prefix="/api/v1")
-            app.include_router(gemini_router,prefix="/api/v1")
+            # app.include_router(gemini_router,prefix="/api/v1")
             app.include_router(regions_router,prefix="/api/v1")
-            app.include_router(review_router,prefix="/api/v1")
+            # app.include_router(review_router,prefix="/api/v1")
+            # app.include_router(reviews_router.router,prefix="/api/v1")
             app.include_router(auth_router,prefix="/api/v1")
+            app.include_router(gemini_router,prefix="/api/v1")
             app.state.routers_included = True
             logger.info("All routers included successfully")
         else:
