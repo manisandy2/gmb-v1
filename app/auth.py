@@ -9,7 +9,9 @@ from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 
 from app.config import settings
-from app.connections import save_google_token, get_google_credentials
+# from app.connections import save_google_token, get_google_credentials
+from app.db.token_repo import save_google_token, get_google_credentials
+
 from app.services.auth_service import (
     get_user_profile,
     lookup_location_metadata,

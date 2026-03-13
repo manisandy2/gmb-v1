@@ -8,10 +8,11 @@ from collections import defaultdict
 from datetime import datetime, timedelta, date
 from typing import Any, Dict, List, Optional, Tuple, Iterable
 from zoneinfo import ZoneInfo
-
+from llm.moderation import moderate_reply
 import httpx
 
-from app.connections import db
+# from app.connections import db
+from app.db.connection import PlanetScaleDB
 from app.config import settings
 from app.services.auth_service import get_google_credentials, lookup_location_metadata
 from app.timezone_utils import now_utc, now_ist
@@ -907,3 +908,53 @@ def list_reviews_optimized(
         "query_execution_seconds": round(query_duration, 2),
         "from_cache": False
     }
+
+# async def generate_safe_reply(review: dict):
+
+#     review_text = review.get("comment", "")
+#     rating = review.get("starRating", 5)
+
+#     # Generate AI reply
+#     ai_reply = await generate_reply(review_text, rating)
+
+#     # Run moderation
+#     moderation_result = moderate_reply(ai_reply, rating)
+
+#     if not moderation_result.allowed:
+#         return fallback_reply(rating)
+
+#     return ai_reply
+
+############ Gemini call with moderation and fallback handling ##########
+from llm.prompt_builder import build_prompt
+from llm.gemini_client import call_gemini
+from llm.response_parser import parse_response
+from llm.reply_enforcer import enforce_reply
+from llm.fallback_handler import fallback_response
+
+
+async def process_review(data: dict):
+
+    try:
+        prompt = build_prompt(
+            review_text=data.get("review_text"),
+            rating=data.get("star_rating"),
+            customer=data.get("customer_name"),
+            store=data.get("store_location")
+        )
+
+        raw_response = await call_gemini(prompt)
+
+        parsed = parse_response(raw_response)
+
+        reply = enforce_reply(parsed)
+
+        return {
+            "sentiment": parsed.get("sentiment"),
+            "emotion": parsed.get("emotion"),
+            "attributes": parsed.get("attributes"),
+            "reply": reply
+        }
+
+    except Exception:
+        return fallback_response(data)

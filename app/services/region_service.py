@@ -5,7 +5,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from app.config import settings
-from app.connections import db
+# from app.connections import db
+from app.db.connection import PlanetScaleDB
 from app.timezone_utils import now_ist
 
 logger = logging.getLogger(__name__)

@@ -6,7 +6,8 @@ from typing import Any, Dict, Optional
 
 from google.oauth2.credentials import Credentials
 
-from app.connections import save_google_token, get_google_credentials, db
+# from app.connections import save_google_token, get_google_credentials, db
+from app.db.token_repo import save_google_token, get_google_credentials
 from app.config import settings
 
 logger = logging.getLogger(__name__)

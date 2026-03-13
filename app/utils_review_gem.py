@@ -1735,7 +1735,7 @@ async def _write_batch_to_db(batch: List):
         logger.error(f"❌ Failed to write batch to PlanetScale: {e}")
         raise
 
-
+########## gemini call with safety block handling and heuristic fallback ##########
 @router.post("/analyze_reply_sync", summary="Analyze review and generate reply (synchronous Gemini call)")
 def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, store_location: str) -> Dict:
     """Synchronous Gemini call with original prompt"""
@@ -1862,3 +1862,4 @@ def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, sto
         )
 
     return {"parsed": parsed, "quality_score": 75}
+

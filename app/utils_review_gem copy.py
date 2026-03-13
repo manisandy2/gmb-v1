@@ -21,6 +21,7 @@ from app.connections import db
 from app.services.auth_service import get_google_credentials
 from app.config import settings
 from app.timezone_utils import now_utc, now_ist
+from app.schemas.review_gem import ProcessAllReviewsRequest, ManualReplyRequest, ProcessAllReviewsV2Request
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -446,7 +447,7 @@ def call_gemini_sync(review_text: str, star_rating: int, customer_name: str, sto
 # -----------------------
 @router.post("/process_all", summary="Partition-optimized processing with monthly partitioning")
 async def process_all_reviews(
-    payload: dict = Body(...),
+    payload: ProcessAllReviewsRequest = Body(...),
     dry_run: bool = Query(False),
     location_id: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD format"),
@@ -498,7 +499,7 @@ async def process_all_reviews(
     
     logger.info(f"✅ Table {TABLE_NAME} initialized")
 
-    location_filter = payload.get("location_id") or location_id
+    location_filter = payload.location_id or location_id
     
     if not date_from:
         date_from = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -1149,12 +1150,12 @@ def log_review_history(
 
 @router.post("/manual_reply", summary="Manually update reply and optionally post to GMB")
 async def manual_update_reply(
-    payload: dict = Body(...),
+    payload: ManualReplyRequest = Body(...),
     post_to_gmb: bool = Query(False, description="Post reply to Google My Business"),
 ):
-    review_id = payload.get("review_id")
-    location_id = payload.get("location_id")
-    reply_text = payload.get("reply")
+    review_id = payload.review_id
+    location_id = payload.location_id
+    reply_text = payload.reply
     if not review_id or not location_id or not reply_text:
         raise HTTPException(status_code=400, detail="review_id, location_id, and reply are required")
     
@@ -1187,10 +1188,10 @@ async def manual_update_reply(
     store_canonical = _normalize_title(_clean_store_title(raw_title) or raw_title or location_id)
     star_rating_int = parse_star_rating(star_rating_raw, default=3)
 
-    provided_sentiment = payload.get("sentiment")
-    provided_emotion = payload.get("emotion")
-    provided_attributes = payload.get("attributes")
-    provided_quality_raw = payload.get("quality_score")
+    provided_sentiment = payload.sentiment
+    provided_emotion = payload.emotion
+    provided_attributes = payload.attributes
+    provided_quality_raw = payload.quality_score
     
     if provided_quality_raw is not None:
         try:
@@ -1243,7 +1244,7 @@ async def manual_update_reply(
 
     quality_score_value = provided_quality if provided_quality is not None else int(getattr(row, "quality_score", 75) or 75)
     
-    context_confidence_raw = payload.get("context_confidence")
+    context_confidence_raw = payload.context_confidence
     if context_confidence_raw is None:
         context_confidence_value = 0.85
     else:
@@ -1285,7 +1286,7 @@ async def manual_update_reply(
         except Exception as e:
             gmb_error = str(e)
 
-    update_reply_flag = payload.get("update_reply", True)
+    update_reply_flag = payload.update_reply
     review_reply_value = reply_text if reply_text is not None else (row.get("reviewReply") or "")
 
     fetched_at = now_utc().isoformat()
@@ -1345,7 +1346,7 @@ async def manual_update_reply(
                 new_quality_score=quality_score_value,
                 gmb_posted=posted_to_gmb,
                 gmb_error=gmb_error,
-                modified_by=payload.get("modified_by"),
+                modified_by=payload.modified_by,
             )
         else:
             logger.info(f"⏭️ No database update needed")
@@ -1374,7 +1375,7 @@ async def manual_update_reply(
 # -----------------------
 # @router.post("/process_all_v2", summary="Batch process with deduplication and optimizations")
 async def process_all_reviews_v2(
-    payload: dict = Body(...),
+    payload: ProcessAllReviewsV2Request = Body(...),
     dry_run: bool = Query(False, description="Preview without making changes"),
     location_id: Optional[str] = Query(None, description="Filter by location"),
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),

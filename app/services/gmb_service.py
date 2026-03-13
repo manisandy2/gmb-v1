@@ -1,17 +1,15 @@
+import httpx
 
+async def post_reply(account_id, location_id, review_id, token, reply):
 
-async def post_reply(review_data, reply, skip):
-
-    if skip:
-        return None
-
-    url = build_gmb_url(review_data)
+    url = f"https://mybusiness.googleapis.com/v4/accounts/{account_id}/locations/{location_id}/reviews/{review_id}/reply"
 
     async with httpx.AsyncClient(timeout=10) as client:
+
         resp = await client.put(
             url,
-            headers=build_headers(),
-            json={"comment": reply}
+            headers={"Authorization": f"Bearer {token}"},
+            json={"comment": reply},
         )
 
     return resp.status_code

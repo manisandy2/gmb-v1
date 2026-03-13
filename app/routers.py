@@ -12,12 +12,14 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 
-from app.connections import (
-    write_locations_to_db,
-    read_location_from_db,
-    delete_location_from_db,
-    db,
-)
+# from app.connections import (
+#     write_locations_to_db,
+#     read_location_from_db,
+#     delete_location_from_db,
+#     db,
+# )
+from app.db.locations_repo import write_locations_to_db, read_location_from_db, delete_location_from_db
+
 from app.config import settings
 from app.schemas.location import (
     FetchLocationsResponse,
@@ -30,6 +32,7 @@ from app.schemas.location import (
     SyncLocationsResponse,
     VerifyAccountResponse,
     AccountInfo,
+    
 )
 from app.services.auth_service import get_google_credentials
 from app.services.location_service import (
