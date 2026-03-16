@@ -1,9 +1,9 @@
-from utils.sentiment_detector import detect_attributes
+from utils.sentiment_detector import detect_attributes_and_emotion
 
 
 def fallback_response(data):
 
-    heuristics = detect_attributes(data.get("review_text", ""))
+    heuristics = detect_attributes_and_emotion(data.get("review_text", ""))
 
     return {
         "sentiment": heuristics["sentiment"],
